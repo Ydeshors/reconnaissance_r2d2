@@ -1,13 +1,13 @@
 
 # coding: utf-8
 
-# In[4]:
+# In[77]:
 
 
 import pylab
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import signal
+from scipy import signal, interpolate
 
 # importation de module pour la manipulation de fichiers audios
 from fastdtw import fastdtw, dtw
@@ -15,8 +15,11 @@ from pydub import AudioSegment
 from scipy.io.wavfile import read as wread
 from scipy.spatial.distance import euclidean
 
+from IPython.core.display import display, HTML
+display(HTML("<style>.container { width:90% !important; }</style>"))
 
-# In[5]:
+
+# In[78]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -151,7 +154,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[9]:
+# In[135]:
 
 
 
@@ -314,108 +317,169 @@ def comparaison(son):
     # distance, path = fastdtw(data, data2, dist=euclidean)
     print(distance)
 
+def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft,                bSignalOrignal = True, bHamminged=True, bZRs=True, bFftFused=True, bFFTs=True, bPeaks=True):
+    # print(tZRC3[::100])
+    if (bSignalOrignal):
+        plt.plot(data)
+    if (bZRs):
+        # plus la fenetre est courte et plus la courbre est agitée
+        plt.plot(tZRC)
+        plt.plot(tZREnergie)
+    if (bSignalOrignal or bZRs):
+        plt.title("Fichier "+str(sFichier))
+        plt.show()
+    
+    if (bHamminged):
+        nDecalage = (len(tSignalHamminged[0])+1)//2
+        # [x * 221 for x in  list(range(0,len(tSignalHamminged)) ) ]
+        # plt.plot([item for sublist in tSignalHamminged for item in sublist] )
+        plt.plot([x * nDecalage for x in  list(range(0,len(tSignalHamminged)) ) ], tSignalHamminged)
+        plt.title("fenêtré hamming")
+        plt.show()
+
+    if (bFftFused):
+        plt.plot([x * nDecalage for x in  list(range(0,len(tSignalFft)) ) ], tSignalFft)
+        # plt.plot([item for sublist in tSignalFft for item in sublist] )
+        plt.title("fft")
+        plt.show()
+
+    if (bFFTs):
+        # plot sur chaque fft, fréquence en abscices db sans log sur ordonnée
+        for x in range (len(tSignalFft)):
+            plt.plot(tSignalFft[x])
+            plt.title("Fenêtre : "+ str(x))
+            #ligne = signal.find_peaks_cwt(tSignalFft[x],np.arange(1,6),max_distances=[50,50,50,50,50], noise_perc=5, gap_thresh=25 )
+            ligne = peakdetect(tSignalFft[x], lookahead=30, delta=800)
+            #findpeaks()
+            vals = []
+            #print(ligne)
+#             for xi in range(len(ligne)):
+#                 vals.append( tSignalFft[x][ligne[xi]] )
+#             print(vals)
+#             plt.plot(ligne, vals )
+            if (bPeaks):
+                plt.plot([ item[0] for item in ligne[0]], [ item[1] for item in ligne[0]])
+            plt.show()
 
     
-f_echant, data = wread('sound/3.wav')    
-dataModded = data[:]
 
-
-#ZRC zero crossing rate, pour elimination des silences
-tnbZeros = []
-cpt = 1
-while cpt<len(data):
-    if (data[cpt]>0 and data[cpt-1]>0):
-        tnbZeros.append(0)
-    elif (data[cpt]<0 and data[cpt-1]<0):
-        tnbZeros.append(0)
-    else:
-        tnbZeros.append(1)
-    cpt +=1
-
-cpt = 0
-tZRC = []
-tZRC2 = []
-tZRC3 = []
-while cpt<len(tnbZeros) :
-    nMin = max(cpt-15,0)
-    nMax = min(cpt+15,len(tnbZeros))
-    tZRC.append( (sum(tnbZeros[nMin:nMax])/(nMax-nMin))* 50000 )
+def HammingPaddingFourier(dataModded):
+    tSignalHamminged = hammi(dataModded)
+    # print(tSignalHamminged)
+    tSignalFft = tSignalHamminged[:]
     
-    nMin = max(cpt-250,0)
-    nMax = min(cpt+250,len(tnbZeros))
-    ajout = (sum(tnbZeros[nMin:nMax])/(nMax-nMin))* 50000 
-    tZRC2.append(ajout)
-    if (ajout >20000): # 3600):
-        ajout = 0
-        dataModded[cpt] = 0
-    tZRC3.append( ajout)
-    cpt +=1
+    #padding de 0 en sortie, 5? fois la longueur initiale, pour plus de précision sur la fft/dft
+    tPaddTableau = np.array([0] * len(tSignalFft[0]) *5)
+    # print(tSignalFft[10])
+    for x in range(len(tSignalFft)):
+        tSignalFft[x] = np.concatenate((tSignalFft[x],tPaddTableau))
+    # print(tSignalFft[10])    
+
+    tSignalFft = list(map(np.fft.fft, tSignalFft) )
+    Reel = lambda x: x.real
+    Image = lambda x: x.imag
+    Module = lambda x: abs(x)
+    tSignalFft = list(map(Module, tSignalFft) )
+    return (tSignalHamminged, tSignalFft)
+    
+def detectVoix(data): #vad voice active detection
+    dataModded = data[:]
+    tSignalHamminged = hammi(data)
+    #ZRC zero crossing rate, pour elimination des silences
+    tnbZeros = []
+    cpt = 1
+    while cpt<len(data):
+        if (data[cpt]>0 and data[cpt-1]>0):
+            tnbZeros.append(0)
+        elif (data[cpt]<0 and data[cpt-1]<0):
+            tnbZeros.append(0)
+        else:
+            tnbZeros.append(1)
+        cpt +=1
+
+    cpt = 0
+    tZRC2 = []
+    tZRC3 = []
+    tEnergie = []
+    tSignalHamminged
+    
+    nHam = len(tSignalHamminged[0])
+    nDecalage = (nHam+1)//2
+    
+    for indice, item in enumerate(tSignalHamminged):
+        nMoyEnergie = 0
+        for x in range(nHam):
+            nMoyEnergie += (data[x+indice*nDecalage]/nHam)**2
+        tEnergie.append(nMoyEnergie)
+    
+    nMax = nDecalage*len(tSignalHamminged)
+#     print(nHam)
+#     print(nDecalage)
+#     print(nMax+nDecalage)
+    tAbs = np.arange(0,nMax+3*nDecalage,nDecalage)
+#     print(tEnergie)
+#     print (len(data))
+#     print( tAbs )
+    f = interpolate.interp1d(tAbs, [tEnergie[0]]+tEnergie+[tEnergie[-1],tEnergie[-1]])
     
     
-# import cmath
-    
-
-# f_echant, data = wread('audiorecordtest2TMP.wav')
-tSignalHamminged = hammi(dataModded)
-# print(tSignalHamminged)
-tSignalFft = tSignalHamminged[:]
-#padding de 0 en sortie, 5? fois la longueur initiale, pour plus de précision sur la fft/dft
-
-tPaddTableau = np.array([0] * len(tSignalFft[0]) *5)
-
-# print(tSignalFft[10])
-
-for x in range(len(tSignalFft)):
-    tSignalFft[x] = np.concatenate((tSignalFft[x],tPaddTableau))
-    
-# print(tSignalFft[10])    
+    cpt=0
+    while cpt<len(tnbZeros) :
         
-tSignalFft = list(map(np.fft.fft, tSignalFft) )
-Reel = lambda x: x.real
-Image = lambda x: x.imag
-Module = lambda x: abs(x)
-tSignalFft = list(map(Module, tSignalFft) )
-
-
-
-# print(tZRC3[::100])
-plt.plot(data)
-# plt.plot(tZRC) #agitée
-plt.plot(tZRC2)
-plt.plot(tZRC3)
-plt.title("Fichier")
-plt.show()
-
-nDecalage = (len(tSignalHamminged[0])+1)//2
-# [x * 221 for x in  list(range(0,len(tSignalHamminged)) ) ]
-# plt.plot([item for sublist in tSignalHamminged for item in sublist] )
-plt.plot([x * nDecalage for x in  list(range(0,len(tSignalHamminged)) ) ], tSignalHamminged)
-plt.title("fenêtré hamming")
-plt.show()
-
-
-plt.plot([x * nDecalage for x in  list(range(0,len(tSignalFft)) ) ], tSignalFft)
-# plt.plot([item for sublist in tSignalFft for item in sublist] )
-plt.title("fft")
-plt.show()
-
-# plot sur chaque fft, fréquence en abscices db sans log sur ordonnée
-for x in range (len(tSignalFft)):
-    plt.plot(tSignalFft[x])
-    plt.title("Fenêtre : "+ str(x))
-#     ligne = signal.find_peaks_cwt(tSignalFft[x],np.arange(1,6),max_distances=[50,50,50,50,50], noise_perc=5, gap_thresh=25 )
-    ligne = peakdetect(tSignalFft[x], lookahead=30, delta=800)
-#     findpeaks()
-    vals = []
-#     print(ligne)
-#     for xi in range(len(ligne)):
-#         vals.append( tSignalFft[x][ligne[xi]] )
-#     print(vals)
-#     plt.plot(ligne, vals )
-    plt.plot([ item[0] for item in ligne[0]], [ item[1] for item in ligne[0]])
-    plt.show()
+        nMin = max(cpt-250,0)
+        nMax = min(cpt+250,len(tnbZeros))
+        nLong = nMax-nMin
+        
+        ajout = (sum(tnbZeros[nMin:nMax])/nLong)* 50000 
+        tZRC2.append(ajout)
+        nEnergieEtZeroRate = f(cpt)*ajout*0.00002
+#         if (ajout >20000): # 3600):
+        if (nEnergieEtZeroRate <30):
+            ajout = 0
+            dataModded[cpt] = 0
+        else:
+            ajout = nEnergieEtZeroRate+5000
+        tZRC3.append( ajout)
+        cpt +=1
     
+#     tmp = [a*b*0.00002 for a,b in zip(f(np.arange(len(data))),tZRC2)] 
+#     tZRC3 = []
+#     for item in tmp:
+#         if (item<30):
+#             item = 0
+#         else:
+#             item +=5000
+#         tZRC3.append(item)
+#     print(tZRC3[2000:2050])
+#     tZRC3 = np.log10(tZRC3)
+#     print("log\n", tZRC3[2000:2050], "\n\n")
+#     tZRC3 = f(np.arange(len(data)))
     
+    return (dataModded, tZRC2, tZRC3)
+
+def travail(tFichiers):
+    for sFichier in tFichiers:
+        f_echant, data = wread(sFichier)    
+        dataModded, tZRC, tZREnergie = detectVoix(data)
+        #Hamming, padding zeros, fft
+        tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+        Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+        
+
+    
+
+
+# In[136]:
+
+
+
+    
+# travail(['sound/0.wav'])
+
+travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav'])
+travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
+
+
 
 
 # In[86]:
