@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[11]:
+# In[4]:
 
 
 import pylab
@@ -16,7 +16,7 @@ from scipy.io.wavfile import read as wread
 from scipy.spatial.distance import euclidean
 
 
-# In[84]:
+# In[5]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -151,7 +151,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[117]:
+# In[9]:
 
 
 
@@ -316,7 +316,7 @@ def comparaison(son):
 
 
     
-f_echant, data = wread('sound/2.wav')    
+f_echant, data = wread('sound/3.wav')    
 dataModded = data[:]
 
 
@@ -352,7 +352,7 @@ while cpt<len(tnbZeros) :
     cpt +=1
     
     
-import cmath
+# import cmath
     
 
 # f_echant, data = wread('audiorecordtest2TMP.wav')
@@ -373,7 +373,8 @@ for x in range(len(tSignalFft)):
 tSignalFft = list(map(np.fft.fft, tSignalFft) )
 Reel = lambda x: x.real
 Image = lambda x: x.imag
-tSignalFft = list(map(Reel, tSignalFft) )
+Module = lambda x: abs(x)
+tSignalFft = list(map(Module, tSignalFft) )
 
 
 
@@ -403,7 +404,7 @@ for x in range (len(tSignalFft)):
     plt.plot(tSignalFft[x])
     plt.title("Fenêtre : "+ str(x))
 #     ligne = signal.find_peaks_cwt(tSignalFft[x],np.arange(1,6),max_distances=[50,50,50,50,50], noise_perc=5, gap_thresh=25 )
-    ligne = peakdetect(tSignalFft[x], lookahead=200, delta=500)
+    ligne = peakdetect(tSignalFft[x], lookahead=30, delta=800)
 #     findpeaks()
     vals = []
 #     print(ligne)
