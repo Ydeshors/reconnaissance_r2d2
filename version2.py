@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[109]:
+# In[144]:
 
 
 import pylab
@@ -21,7 +21,7 @@ display(HTML("<style>.container { width:90% !important; }</style>"))
 tDicoSonsConnus = {}
 
 
-# In[110]:
+# In[145]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -156,7 +156,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[139]:
+# In[167]:
 
 
 
@@ -365,7 +365,7 @@ def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, t
 #             print(vals)
 #             plt.plot(ligne, vals )
             if (bPeaks):
-                nDelta = max(tSignalFft[x]) *0.3
+                nDelta = max(tSignalFft[x]) *0.5 # *0.3
                 ligne = peakdetect(tSignalFft[x][:nLongOpti], lookahead=6, delta=nDelta)
                 plt.plot([ item[0] for item in ligne[0]], [ item[1] for item in ligne[0]], "o")
             plt.show()
@@ -375,7 +375,7 @@ def detectPics(tSignalFft) :
     nLongueurMaxFFT = len(tSignalFft[0])
     nLongOpti = nLongueurMaxFFT//2
     for x in range (len(tSignalFft)):
-        nDelta = max(tSignalFft[x]) *0.3
+        nDelta = max(tSignalFft[x]) *0.5 #*0.3
         ligne = peakdetect(tSignalFft[x][:nLongOpti], lookahead=6, delta=nDelta) #delta 800
         #ligne 0 a les pics positifs, ligne[1] les négatifs. tSignalFFT a les modules des complexes donc absolu, que des positifs sur ligne
         #ligne = tSignalFft[x]
@@ -466,6 +466,7 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     
     
     #nettoyage du silence en début et fin de fichier
+#     Il serait préférable d'avoir assez de 0 en début et fin pour remplir la moitié de la première(dernière) fenêtre de hamming avec ces 0, les fft seront plus douces aux extrémités
     if (bExcluSilences):
         dataEX = []
         nDebut = 0
@@ -474,7 +475,7 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
         while cpt < len(dataModded):
             while(dataModded[cpt]==0):
                 cpt+=1
-            nDebut = cpt
+            nDebut = cpt-1
             break
 #         print(nFin)
         cpt = len(dataModded)-2 # nombre à la x*$£! au bout, on le vire, sert à rien ce truc
@@ -482,9 +483,14 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
 #             print (dataModded[cpt])
             while(dataModded[cpt]==0):
                 cpt-=1
-            nFin = cpt
+            nFin = cpt+2
             break
-#         print (nFin)
+
+        if (nFin> len(dataModded)-1):
+            nFin = len(dataModded)
+        if (nDebut<0):
+            nDebut = 0
+        
         cpt = nDebut
         while cpt < nFin:
             dataEX.append( dataModded[cpt] )
@@ -524,7 +530,7 @@ def comparaison(sFichier, tPics):
     tDistances = [0]*nNbSonsConnus
     tNoms = [""]*nNbSonsConnus
     cpt = 0
-    print("pics fichier ",sFichier, "\n", tPics, "\n\n")
+#     print("pics fichier ",sFichier, "\n", tPics, "\n\n")
     for indice, item in tDicoSonsConnus.items() :
 #         print("-->pics ",indice, "\n", item[:20], "\n\n")
         print("compare avec ", indice)
@@ -544,11 +550,11 @@ def evalue(sFichier):
     f_echant, data = wread(sFichier)    
     dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True) # 30 bien sur son propre, son bruité seuil à 1000
     tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
-    Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+#     Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=True)
     comparaison(sFichier, detectPics(tSignalFft))
 
 
-# In[137]:
+# In[168]:
 
 
 
@@ -557,20 +563,36 @@ def evalue(sFichier):
 # travail(['sound/0.wav'])
 travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav'])
 travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
+travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'])
+# travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'])
 
 # print (tDicoSonsConnus)
 
 
-# In[140]:
+# In[169]:
 
 
 # evalue('sound/5.wav')
-evalue('sound/3.wav')
+evalue('sound/0.wav')
+evalue('sound/1.wav')
 evalue('sound/2.wav')
+evalue('sound/3.wav')
 evalue('sound/son3.wav')
+evalue('sound/4.wav')
+evalue('sound/5.wav')
+evalue('sound/6.wav')
+evalue('sound/7.wav')
+evalue('sound/8.wav')
+evalue('sound/9.wav')
+evalue('sound/a.wav')
+evalue('sound/b.wav')
+evalue('sound/c.wav')
+evalue('sound/d.wav')
+evalue('sound/e.wav')
+evalue('sound/f.wav')
 
 
-# In[141]:
+# In[163]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
@@ -586,7 +608,7 @@ evalue('sound/son3.wav')
 # plt.show()
 
 
-# In[ ]:
+# In[150]:
 
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
