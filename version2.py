@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[77]:
+# In[109]:
 
 
 import pylab
@@ -18,8 +18,10 @@ from scipy.spatial.distance import euclidean
 from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:90% !important; }</style>"))
 
+tDicoSonsConnus = {}
 
-# In[78]:
+
+# In[110]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -154,7 +156,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[135]:
+# In[139]:
 
 
 
@@ -288,7 +290,7 @@ def detection_parole(son):
         print("RAS mon colonel \n")
 
 
-def comparaison(son):
+def comparaisonOLD(son):
     f_echant, data = wread('audiorecordtest2TMP.wav')
     # f_echant2, data2 = wread('sound/1.wav')
 
@@ -345,22 +347,43 @@ def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, t
 
     if (bFFTs):
         # plot sur chaque fft, fréquence en abscices db sans log sur ordonnée
+        nLongueurMaxFFT = len(tSignalFft[0])
+        nLongOpti = nLongueurMaxFFT//2
+#         for x in range (len(tSignalFft)):
+#             nLongueurMaxFFT = max(nLongueurMaxFFT, len(tSignalFft[x]) )
+        
         for x in range (len(tSignalFft)):
-            plt.plot(tSignalFft[x])
+            plt.plot(tSignalFft[x][:nLongOpti])
             plt.title("Fenêtre : "+ str(x))
             #ligne = signal.find_peaks_cwt(tSignalFft[x],np.arange(1,6),max_distances=[50,50,50,50,50], noise_perc=5, gap_thresh=25 )
-            ligne = peakdetect(tSignalFft[x], lookahead=30, delta=800)
+            
             #findpeaks()
-            vals = []
+#             vals = []
             #print(ligne)
 #             for xi in range(len(ligne)):
 #                 vals.append( tSignalFft[x][ligne[xi]] )
 #             print(vals)
 #             plt.plot(ligne, vals )
             if (bPeaks):
-                plt.plot([ item[0] for item in ligne[0]], [ item[1] for item in ligne[0]])
+                nDelta = max(tSignalFft[x]) *0.3
+                ligne = peakdetect(tSignalFft[x][:nLongOpti], lookahead=6, delta=nDelta)
+                plt.plot([ item[0] for item in ligne[0]], [ item[1] for item in ligne[0]], "o")
             plt.show()
 
+def detectPics(tSignalFft) :
+    tSuccessionPics = []
+    nLongueurMaxFFT = len(tSignalFft[0])
+    nLongOpti = nLongueurMaxFFT//2
+    for x in range (len(tSignalFft)):
+        nDelta = max(tSignalFft[x]) *0.3
+        ligne = peakdetect(tSignalFft[x][:nLongOpti], lookahead=6, delta=nDelta) #delta 800
+        #ligne 0 a les pics positifs, ligne[1] les négatifs. tSignalFFT a les modules des complexes donc absolu, que des positifs sur ligne
+        #ligne = tSignalFft[x]
+        #item1 pour la puissance du pic, mais on veut l'abscisse, la fréquence donc item0
+        [tSuccessionPics.append(item[0]) for item in ligne[0]]
+#     print (tSuccessionPics)
+    return tSuccessionPics
+         
     
 
 def HammingPaddingFourier(dataModded):
@@ -382,7 +405,7 @@ def HammingPaddingFourier(dataModded):
     tSignalFft = list(map(Module, tSignalFft) )
     return (tSignalHamminged, tSignalFft)
     
-def detectVoix(data): #vad voice active detection
+def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detection
     dataModded = data[:]
     tSignalHamminged = hammi(data)
     #ZRC zero crossing rate, pour elimination des silences
@@ -422,7 +445,6 @@ def detectVoix(data): #vad voice active detection
 #     print( tAbs )
     f = interpolate.interp1d(tAbs, [tEnergie[0]]+tEnergie+[tEnergie[-1],tEnergie[-1]])
     
-    
     cpt=0
     while cpt<len(tnbZeros) :
         
@@ -434,13 +456,42 @@ def detectVoix(data): #vad voice active detection
         tZRC2.append(ajout)
         nEnergieEtZeroRate = f(cpt)*ajout*0.00002
 #         if (ajout >20000): # 3600):
-        if (nEnergieEtZeroRate <30):
+        if (nEnergieEtZeroRate <  nSeuil  ):
             ajout = 0
             dataModded[cpt] = 0
         else:
             ajout = nEnergieEtZeroRate+5000
         tZRC3.append( ajout)
         cpt +=1
+    
+    
+    #nettoyage du silence en début et fin de fichier
+    if (bExcluSilences):
+        dataEX = []
+        nDebut = 0
+        nFin = len(dataModded)
+        cpt=0
+        while cpt < len(dataModded):
+            while(dataModded[cpt]==0):
+                cpt+=1
+            nDebut = cpt
+            break
+#         print(nFin)
+        cpt = len(dataModded)-2 # nombre à la x*$£! au bout, on le vire, sert à rien ce truc
+        while (cpt>0):
+#             print (dataModded[cpt])
+            while(dataModded[cpt]==0):
+                cpt-=1
+            nFin = cpt
+            break
+#         print (nFin)
+        cpt = nDebut
+        while cpt < nFin:
+            dataEX.append( dataModded[cpt] )
+            cpt +=1
+#         print(dataModded[-20:])
+        dataModded = dataEX
+#         print(dataEX[-20:])
     
 #     tmp = [a*b*0.00002 for a,b in zip(f(np.arange(len(data))),tZRC2)] 
 #     tZRC3 = []
@@ -463,37 +514,81 @@ def travail(tFichiers):
         dataModded, tZRC, tZREnergie = detectVoix(data)
         #Hamming, padding zeros, fft
         tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
-        Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
-        
+#         Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+        tDicoSonsConnus[sFichier] = detectPics(tSignalFft)
+        print ("Enregistrement du fichier ", sFichier, " terminé.")
+    print("Travail terminé.")
 
-    
+def comparaison(sFichier, tPics):
+    nNbSonsConnus = len(tDicoSonsConnus)
+    tDistances = [0]*nNbSonsConnus
+    tNoms = [""]*nNbSonsConnus
+    cpt = 0
+    print("pics fichier ",sFichier, "\n", tPics, "\n\n")
+    for indice, item in tDicoSonsConnus.items() :
+#         print("-->pics ",indice, "\n", item[:20], "\n\n")
+        print("compare avec ", indice)
+        tDistances[cpt], _ = fastdtw(item, tPics, dist=euclidean)
+        tNoms[cpt] = indice
+        cpt += 1
+    plt.ylabel('Distances')
+    tIndices = np.arange(nNbSonsConnus)
+    plt.title('Distances de '+sFichier )
+    plt.xticks(tIndices, tNoms , rotation=70)
+    plt.plot(tIndices, tDistances)
+#     plt.xscale("linear")
+    plt.show()
+
+def evalue(sFichier):
+    print("Evaluation de ", sFichier)
+    f_echant, data = wread(sFichier)    
+    dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True) # 30 bien sur son propre, son bruité seuil à 1000
+    tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+    Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+    comparaison(sFichier, detectPics(tSignalFft))
 
 
-# In[136]:
+# In[137]:
 
 
 
+# création du dictionnaire, enregistrement des sons de référence
     
 # travail(['sound/0.wav'])
-
 travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav'])
 travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
 
+# print (tDicoSonsConnus)
 
 
+# In[140]:
 
-# In[86]:
+
+# evalue('sound/5.wav')
+evalue('sound/3.wav')
+evalue('sound/2.wav')
+evalue('sound/son3.wav')
+
+
+# In[141]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
 
 
 
-f, t, Sxx = signal.spectrogram(np.array([item for sublist in tSignalHamminged for item in sublist]), 27)
-# f, t, Sxx = signal.spectrogram(np.array([item for sublist in tSignalFft for item in sublist]), 144)
-# f, t, Sxx = signal.spectrogram(np.array(tSignalFft[94]))
-plt.pcolormesh(t, f, Sxx)
-plt.ylabel('Frequency [Hz]')
-plt.xlabel('Time [sec]')
-plt.show()
+# f, t, Sxx = signal.spectrogram(np.array([item for sublist in tSignalHamminged for item in sublist]), 27)
+# # f, t, Sxx = signal.spectrogram(np.array([item for sublist in tSignalFft for item in sublist]), 144)
+# # f, t, Sxx = signal.spectrogram(np.array(tSignalFft[94]))
+# plt.pcolormesh(t, f, Sxx)
+# plt.ylabel('Frequency [Hz]')
+# plt.xlabel('Time [sec]')
+# plt.show()
+
+
+# In[ ]:
+
+
+tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
+[10,11,12,13,14,15,16][-3:]
 
