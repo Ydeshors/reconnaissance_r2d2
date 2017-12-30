@@ -1,12 +1,13 @@
 
 # coding: utf-8
 
-# In[144]:
+# In[175]:
 
 
 import pylab
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from scipy import signal, interpolate
 
 # importation de module pour la manipulation de fichiers audios
@@ -21,7 +22,13 @@ display(HTML("<style>.container { width:90% !important; }</style>"))
 tDicoSonsConnus = {}
 
 
-# In[145]:
+# In[188]:
+
+
+bDurees = False
+
+
+# In[176]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -156,7 +163,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[167]:
+# In[192]:
 
 
 
@@ -407,35 +414,49 @@ def HammingPaddingFourier(dataModded):
     
 def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detection
     dataModded = data[:]
+    if (bDurees):
+        nTps = time.process_time()
     tSignalHamminged = hammi(data)
+    if (bDurees):
+        print("Durée Hamming: ", time.process_time()-nTps )
+        nTps = time.process_time()
     #ZRC zero crossing rate, pour elimination des silences
-    tnbZeros = []
+    tnbZeros = [1]*len(data)
     cpt = 1
     while cpt<len(data):
         if (data[cpt]>0 and data[cpt-1]>0):
-            tnbZeros.append(0)
+#             tnbZeros.append(0)
+            tnbZeros[cpt] = 0
         elif (data[cpt]<0 and data[cpt-1]<0):
-            tnbZeros.append(0)
-        else:
-            tnbZeros.append(1)
+#             tnbZeros.append(0)
+            tnbZeros[cpt] = 0
+#         else:
+#             tnbZeros.append(1)
         cpt +=1
 
     cpt = 0
-    tZRC2 = []
-    tZRC3 = []
-    tEnergie = []
+    nNbSignauxHam = len(tSignalHamminged)
+    tZRC2 = [0]*len(data)
+    tZRC3 = [0]*len(data)
+    tEnergie = [0]*nNbSignauxHam
     tSignalHamminged
     
     nHam = len(tSignalHamminged[0])
     nDecalage = (nHam+1)//2
     
+    cpt=0
     for indice, item in enumerate(tSignalHamminged):
         nMoyEnergie = 0
         for x in range(nHam):
             nMoyEnergie += (data[x+indice*nDecalage]/nHam)**2
-        tEnergie.append(nMoyEnergie)
+#         tEnergie.append(nMoyEnergie)
+        tEnergie[cpt] = nMoyEnergie
+        cpt +=1
     
-    nMax = nDecalage*len(tSignalHamminged)
+    if (bDurees):
+        print("Durée ZRC: ", time.process_time()-nTps )
+    
+    nMax = nDecalage*nNbSignauxHam
 #     print(nHam)
 #     print(nDecalage)
 #     print(nMax+nDecalage)
@@ -445,15 +466,19 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
 #     print( tAbs )
     f = interpolate.interp1d(tAbs, [tEnergie[0]]+tEnergie+[tEnergie[-1],tEnergie[-1]])
     
+    if (bDurees):
+        print("Durée ZRC+Interpolate: ", time.process_time()-nTps )
+    
+    #ICI choisir un pas + grand pour réduire la durée d'exécution, ce sera comme prendre une plus grande fenêtre, la précision n'est pas d'une grande importance ici
     cpt=0
-    while cpt<len(tnbZeros) :
-        
+    while cpt<len(tnbZeros) : #len(data)
         nMin = max(cpt-250,0)
         nMax = min(cpt+250,len(tnbZeros))
         nLong = nMax-nMin
         
         ajout = (sum(tnbZeros[nMin:nMax])/nLong)* 50000 
-        tZRC2.append(ajout)
+#         tZRC2.append(ajout)
+        tZRC2[cpt] = ajout
         nEnergieEtZeroRate = f(cpt)*ajout*0.00002
 #         if (ajout >20000): # 3600):
         if (nEnergieEtZeroRate <  nSeuil  ):
@@ -461,14 +486,18 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
             dataModded[cpt] = 0
         else:
             ajout = nEnergieEtZeroRate+5000
-        tZRC3.append( ajout)
+#         tZRC3.append( ajout)
+        tZRC3[cpt] = ajout
         cpt +=1
     
+    if (bDurees):
+        print("Durée ZRC+Energie: ", time.process_time()-nTps )
+        nTps = time.process_time()
     
     #nettoyage du silence en début et fin de fichier
 #     Il serait préférable d'avoir assez de 0 en début et fin pour remplir la moitié de la première(dernière) fenêtre de hamming avec ces 0, les fft seront plus douces aux extrémités
     if (bExcluSilences):
-        dataEX = []
+#         dataEX = []
         nDebut = 0
         nFin = len(dataModded)
         cpt=0
@@ -491,10 +520,14 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
         if (nDebut<0):
             nDebut = 0
         
+        dataEX = [0]* (nFin-nDebut)
         cpt = nDebut
+        cptEX = 0
         while cpt < nFin:
-            dataEX.append( dataModded[cpt] )
+#             dataEX.append( dataModded[cpt] )
+            dataEX[cptEX] = dataModded[cpt]
             cpt +=1
+            cptEX +=1
 #         print(dataModded[-20:])
         dataModded = dataEX
 #         print(dataEX[-20:])
@@ -533,8 +566,11 @@ def comparaison(sFichier, tPics):
 #     print("pics fichier ",sFichier, "\n", tPics, "\n\n")
     for indice, item in tDicoSonsConnus.items() :
 #         print("-->pics ",indice, "\n", item[:20], "\n\n")
-        print("compare avec ", indice)
+#         print("compare avec ", indice)
+        #distance des fréquences
         tDistances[cpt], _ = fastdtw(item, tPics, dist=euclidean)
+        #distance des puissances, dB
+        
         tNoms[cpt] = indice
         cpt += 1
     plt.ylabel('Distances')
@@ -544,17 +580,27 @@ def comparaison(sFichier, tPics):
     plt.plot(tIndices, tDistances)
 #     plt.xscale("linear")
     plt.show()
+    print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
+    print("\n\n")
 
 def evalue(sFichier):
     print("Evaluation de ", sFichier)
-    f_echant, data = wread(sFichier)    
+    f_echant, data = wread(sFichier)
+    if (bDurees):
+        nTps = time.process_time()
     dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True) # 30 bien sur son propre, son bruité seuil à 1000
+    if (bDurees):
+        print("Durée : ", time.process_time()-nTps )
+        nTps = time.process_time()
     tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+    if (bDurees):
+        print("Durée : ", time.process_time()-nTps )
+#     nTps = time.process_time()
 #     Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=True)
     comparaison(sFichier, detectPics(tSignalFft))
 
 
-# In[168]:
+# In[178]:
 
 
 
@@ -569,7 +615,7 @@ travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','
 # print (tDicoSonsConnus)
 
 
-# In[169]:
+# In[193]:
 
 
 # evalue('sound/5.wav')
@@ -613,4 +659,13 @@ evalue('sound/f.wav')
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
 [10,11,12,13,14,15,16][-3:]
+
+
+# In[174]:
+
+
+import time 
+print(time.process_time())
+print("oups")
+time.process_time()
 
