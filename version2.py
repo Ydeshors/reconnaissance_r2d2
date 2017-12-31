@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[175]:
+# In[69]:
 
 
 import pylab
@@ -19,16 +19,16 @@ from scipy.spatial.distance import euclidean
 from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:90% !important; }</style>"))
 
+
+# In[70]:
+
+
 tDicoSonsConnus = {}
-
-
-# In[188]:
-
-
+nLongueurMinSonConnu = np.Inf
 bDurees = False
 
 
-# In[176]:
+# In[71]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -163,36 +163,36 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[192]:
+# In[76]:
 
 
 
 
 
-def w_k(k, n, N):
-    return np.exp(2*1j*k*n*np.pi/N)
+# def w_k(k, n, N):
+#     return np.exp(2*1j*k*n*np.pi/N)
 
-def dft(s, N):
-    result = [0]*int(N)
-    k = 0
-    while (k<N):
-        n=0
-        while (n<N):
-            result[k] += s[n]*w_k(k,n,N).conjugate()
-            n = n + 1
-        k = k + 1
-    return result
+# def dft(s, N):
+#     result = [0]*int(N)
+#     k = 0
+#     while (k<N):
+#         n=0
+#         while (n<N):
+#             result[k] += s[n]*w_k(k,n,N).conjugate()
+#             n = n + 1
+#         k = k + 1
+#     return result
 
 
-# Fichier en entrée (ce qui a été dit)
+# # Fichier en entrée (ce qui a été dit)
 
-f_echant, data = wread('sound/1.wav')
-facteur = 16
+# f_echant, data = wread('sound/1.wav')
+# facteur = 16
 
-# representation amplitude fréquence
-abscisse = []
-ordonne = []
-cpt = 0
+# # representation amplitude fréquence
+# abscisse = []
+# ordonne = []
+# cpt = 0
 
 def hammi(signal):
     # découpage en fenetres de hamming, 22050 fps, pour 20ms la fenetre ça fait 22050*0.020
@@ -272,7 +272,7 @@ def hammi(signal):
         # cpt += 1
 
 # A revoir
-def detection_parole(son):
+def detection_paroleOLD(son):
     facteur = 16
     N = int(len(son) / facteur)  # on prend une valeur paire pour N
     if (N % 2 != 0):
@@ -547,14 +547,21 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     
     return (dataModded, tZRC2, tZRC3)
 
-def travail(tFichiers):
+def travail(tFichiers, bAffichage=False):
     for sFichier in tFichiers:
         f_echant, data = wread(sFichier)    
-        dataModded, tZRC, tZREnergie = detectVoix(data)
+        dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True)
+        global nLongueurMinSonConnu
+        if (len(dataModded)<nLongueurMinSonConnu):
+            nLongueurMinSonConnu = len(dataModded)
         #Hamming, padding zeros, fft
         tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
-#         Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
-        tDicoSonsConnus[sFichier] = detectPics(tSignalFft)
+        if bAffichage:
+            Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+        tPics = detectPics(tSignalFft)
+#         print( tPics)
+        tDicoSonsConnus[sFichier] = tPics
+#         print("dico ", tDicoSonsConnus[sFichier])
         print ("Enregistrement du fichier ", sFichier, " terminé.")
     print("Travail terminé.")
 
@@ -565,10 +572,10 @@ def comparaison(sFichier, tPics):
     cpt = 0
 #     print("pics fichier ",sFichier, "\n", tPics, "\n\n")
     for indice, item in tDicoSonsConnus.items() :
-#         print("-->pics ",indice, "\n", item[:20], "\n\n")
+#         print("-->pics ",indice, "\n", item, "\n\n")
 #         print("compare avec ", indice)
         #distance des fréquences
-        tDistances[cpt], _ = fastdtw(item, tPics, dist=euclidean)
+        tDistances[cpt], _ = fastdtw(item, tPics, dist=None) #dist=euclidean)
         #distance des puissances, dB
         
         tNoms[cpt] = indice
@@ -581,8 +588,12 @@ def comparaison(sFichier, tPics):
 #     plt.xscale("linear")
     plt.show()
     print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
-    print("\n\n")
 
+def ordreDeFrequence(tPics):
+    nOrdre = sum(tPics) / len(tPics)
+    print("Fréquence moyenne : ", nOrdre)
+    
+    
 def evalue(sFichier):
     print("Evaluation de ", sFichier)
     f_echant, data = wread(sFichier)
@@ -596,49 +607,71 @@ def evalue(sFichier):
     if (bDurees):
         print("Durée : ", time.process_time()-nTps )
 #     nTps = time.process_time()
-#     Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=True)
-    comparaison(sFichier, detectPics(tSignalFft))
+    Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+    tPics = detectPics(tSignalFft)
+    comparaison(sFichier, tPics)
+    ordreDeFrequence(tPics)
+    print("\n\n")
+    
+def chercheSons():
+    # on hypothèse un fichier de plusieurs sons avec ou sans sliences entre les sons
+    # virer le silence en début de fichier
+    # à partir de ce nouveau début prendre X données du fichier, X étant la taille minimale d'un son de référence soit nLongueurMinSonConnu
+    # Enregistrer la plus petite distance pour cet échantillon
+    # augmenter la taille de la fenêtre prise d'un quart de seconde
+    # Calculer la nouvelle distance de cet échantillon
+    #tant que la nouvelle plus petite distance est plus petite que la précédente, continuer à augmenter la taille de la fenêtre et calculer la distance
+    # sortie de boucle, enregistrer le son associé à la plus petite distance enregistrée (celle de la fenêtre d'avant la sortie de boucle)
+    # Chercher le premier silence sur la dernière fenêtre ajoutée à l'échantillon
+    # s'il y a une silence, mettre la fin de ce silence comme nouveau début d'échantillon, sinon le début de la fenêtre est le nouveau début d'échantillon
+    # recommencer le fonctionnement précédent pour rechercher un nouveau son, faire celà jusqu'à la fin du fichier (auquel on a enlevé le silence de fin)
+    
+    #risque que l'algo donne toujours une distance sur un son à la fin alors qu'il n'y a rien à attribuer
+    return
 
 
-# In[178]:
+# In[77]:
 
 
 
 # création du dictionnaire, enregistrement des sons de référence
     
 # travail(['sound/0.wav'])
-travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav'])
-travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
-travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'])
+travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav','sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'], bAffichage=False)
+# travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
+# travail(['sound/6.wav'], bAffichage=True)
+travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
 # travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'])
 
+print("Son le plus court : ", nLongueurMinSonConnu)
 # print (tDicoSonsConnus)
 
 
-# In[193]:
+# In[78]:
 
 
-# evalue('sound/5.wav')
+# evalue('sound/6.wav')
 evalue('sound/0.wav')
 evalue('sound/1.wav')
 evalue('sound/2.wav')
 evalue('sound/3.wav')
 evalue('sound/son3.wav')
-evalue('sound/4.wav')
-evalue('sound/5.wav')
-evalue('sound/6.wav')
-evalue('sound/7.wav')
-evalue('sound/8.wav')
-evalue('sound/9.wav')
-evalue('sound/a.wav')
-evalue('sound/b.wav')
-evalue('sound/c.wav')
-evalue('sound/d.wav')
-evalue('sound/e.wav')
-evalue('sound/f.wav')
+evalue('sound/xxx.wav')
+# evalue('sound/4.wav')
+# evalue('sound/5.wav')
+# evalue('sound/6.wav')
+# evalue('sound/7.wav')
+# evalue('sound/8.wav')
+# evalue('sound/9.wav')
+# evalue('sound/a.wav')
+# evalue('sound/b.wav')
+# evalue('sound/c.wav')
+# evalue('sound/d.wav')
+# evalue('sound/e.wav')
+# evalue('sound/f.wav')
 
 
-# In[163]:
+# In[ ]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
@@ -654,14 +687,14 @@ evalue('sound/f.wav')
 # plt.show()
 
 
-# In[150]:
+# In[ ]:
 
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
 [10,11,12,13,14,15,16][-3:]
 
 
-# In[174]:
+# In[ ]:
 
 
 import time 
