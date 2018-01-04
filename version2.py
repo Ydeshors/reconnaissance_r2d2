@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[69]:
+# In[4]:
 
 
 import pylab
@@ -20,15 +20,17 @@ from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:90% !important; }</style>"))
 
 
-# In[70]:
+# In[5]:
 
 
 tDicoSonsConnus = {}
 nLongueurMinSonConnu = np.Inf
 bDurees = False
+#hamming
+nTailleFen = round(22050*0.01) #10 ms
 
 
-# In[71]:
+# In[6]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -163,7 +165,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[76]:
+# In[7]:
 
 
 
@@ -194,32 +196,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
 # ordonne = []
 # cpt = 0
 
-def hammi(signal):
-    # découpage en fenetres de hamming, 22050 fps, pour 20ms la fenetre ça fait 22050*0.020
-    nTailleFen = round(22050*0.01) #10 ms
-    fenPure = np.hamming(nTailleFen)
-    nSize = len(signal)
-    tSortie = []
-#     print(fenPure[:50])
-#     print( signal)
-#     print(nSize)
-#     print(nTailleFen)
-#     print(nSize//nTailleFen)
-#     n = 20
-#     tSortie.append( signal[n*nTailleFen:(n+1)*nTailleFen]*fenPure )
-#     print( tSortie)
-    n=0
-    nDecal = (nTailleFen+1)//2
-#     nDecal = nTailleFen
-    while (n*nDecal) < (nSize-nTailleFen):
-#     for n in range (nSize):
-        tSortie.append( signal[n*nDecal:n*nDecal +nTailleFen]*fenPure )
-        n +=1
-    
-    #padding de 0 en sortie, 5? fois la longueur initiale, pour plus de précision sur la fft/dft
-#     for _ in range()
-    
-    return tSortie
+
     
 # Protocole à suivre :
 #     récupération du signal
@@ -271,61 +248,36 @@ def hammi(signal):
 #         ordonne.append(10 * np.log10(abs(dft_signal_ss_echant[cpt])))
         # cpt += 1
 
-# A revoir
-def detection_paroleOLD(son):
-    facteur = 16
-    N = int(len(son) / facteur)  # on prend une valeur paire pour N
-    if (N % 2 != 0):
-        N = N - 1
-    dft_signal_ss_echant = dft(son[::facteur], len(son) // facteur)
-    log_result = []
-    moyenne_log = 0
-    for elem in dft_signal_ss_echant:
-        log_result.append(10 * np.log10(abs(elem)))
-        moyenne_log += 10 * np.log10(abs(elem))
-    max_log = max(log_result)
-    moyenne_log = moyenne_log / len(dft_signal_ss_echant)
 
-    print("Max log:")
-    print(max_log)
-
-    print(moyenne_log)
-    # 10% de variation -> parole
-    if ((max_log-moyenne_log) > moyenne_log*0.1):
-        print("Bruit détecté \n")
-    else:
-        print("RAS mon colonel \n")
-
-
-def comparaisonOLD(son):
-    f_echant, data = wread('audiorecordtest2TMP.wav')
-    # f_echant2, data2 = wread('sound/1.wav')
-
-    # 36 pour les 10 chiffres et les 26 lettres
-    distance = [100]*36
-    # Comparaison avec les chiffres
-    cpt = 0
-    print(len(data))
-    while (cpt<10):
-        nomFichier = 'sound/' + str(cpt) +'.wav'
-        print(nomFichier)
-        f_echant2, data2 = wread(nomFichier)
-        print(len(data2))
-        distance[cpt], _ = fastdtw(data, data2, dist=euclidean)
-#         distance[cpt], _ = dtw(data, data2, dist=euclidean)
-        print(cpt)
-        cpt = cpt + 1
-    # facteur = 16
-    # N = int(len(son) / facteur)  # on prend une valeur paire pour N
-    # if (N % 2 != 0):
-    #     N = N - 1
-    # NFS = f_echant / facteur
-    # RF = NFS / N
-    # dft_signal_ss_echant = dft(data[::facteur], len(data) // facteur)
-    # dft_signal_ss_echant2 = dft(data2[::facteur], len(data2) // facteur)
-    # distance, path = fastdtw(data, data2, dist=euclidean)
-    print(distance)
-
+def hammi(signal):
+    # découpage en fenetres de hamming, 22050 fps, pour 20ms la fenetre ça fait 22050*0.020
+    global nTailleFen
+#     nTailleFen = round(22050*0.01) #10 ms
+    fenPure = np.hamming(nTailleFen)
+    nSize = len(signal)
+    tSortie = []
+#     print(fenPure[:50])
+#     print( signal)
+#     print(nSize)
+#     print(nTailleFen)
+#     print(nSize//nTailleFen)
+#     n = 20
+#     tSortie.append( signal[n*nTailleFen:(n+1)*nTailleFen]*fenPure )
+#     print( tSortie)
+    n=0
+    nDecal = (nTailleFen+1)//2
+#     nDecal = nTailleFen
+    while (n*nDecal) < (nSize-nTailleFen):
+#     for n in range (nSize):
+        tSortie.append( signal[n*nDecal:n*nDecal +nTailleFen]*fenPure )
+        n +=1
+    
+    #padding de 0 en sortie, 5? fois la longueur initiale, pour plus de précision sur la fft/dft
+#     for _ in range()
+    
+    return tSortie
+    
+    
 def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft,                bSignalOrignal = True, bHamminged=True, bZRs=True, bFftFused=True, bFFTs=True, bPeaks=True):
     # print(tZRC3[::100])
     if (bSignalOrignal):
@@ -447,14 +399,22 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     cpt=0
     for indice, item in enumerate(tSignalHamminged):
         nMoyEnergie = 0
+        #Entre officiel et alternative différence de temps alt:0.062, offi:0.109
+        #officiel, somme de carrés moyennés
         for x in range(nHam):
             nMoyEnergie += (data[x+indice*nDecalage]/nHam)**2
+        #alternative tentée pour réduction de coûts
+#         for x in range(nHam):
+#             nMoyEnergie += data[x+indice*nDecalage]
+#         nMoyEnergie = (nMoyEnergie/nHam)**2
+        
 #         tEnergie.append(nMoyEnergie)
         tEnergie[cpt] = nMoyEnergie
         cpt +=1
     
     if (bDurees):
-        print("Durée ZRC: ", time.process_time()-nTps )
+        print("Durée ZRC et énergie séparés: ", time.process_time()-nTps )
+        nTps = time.process_time()
     
     nMax = nDecalage*nNbSignauxHam
 #     print(nHam)
@@ -467,31 +427,45 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     f = interpolate.interp1d(tAbs, [tEnergie[0]]+tEnergie+[tEnergie[-1],tEnergie[-1]])
     
     if (bDurees):
-        print("Durée ZRC+Interpolate: ", time.process_time()-nTps )
+        print("Durée Interpolate de ZRC: ", time.process_time()-nTps )
+        nTps = time.process_time()
     
     #ICI choisir un pas + grand pour réduire la durée d'exécution, ce sera comme prendre une plus grande fenêtre, la précision n'est pas d'une grande importance ici
     cpt=0
+    nSommeZeros = 0
+    nPas = 50 #220 10ms
     while cpt<len(tnbZeros) : #len(data)
         nMin = max(cpt-250,0)
         nMax = min(cpt+250,len(tnbZeros))
+        nMaxCptBis = min(cpt+nPas,len(tnbZeros))
         nLong = nMax-nMin
         
-        ajout = (sum(tnbZeros[nMin:nMax])/nLong)* 50000 
+        nSommeZeros = sum(tnbZeros[nMin:nMax])
+        ajout = (nSommeZeros/nLong)* 50000 
+        ajoutUnchanged = ajout
 #         tZRC2.append(ajout)
-        tZRC2[cpt] = ajout
+#         tZRC2[cpt] = ajout
+        
         nEnergieEtZeroRate = f(cpt)*ajout*0.00002
 #         if (ajout >20000): # 3600):
         if (nEnergieEtZeroRate <  nSeuil  ):
             ajout = 0
-            dataModded[cpt] = 0
+#             dataModded[cpt] = 0
+            for cptBis in range (cpt,nMaxCptBis):
+                dataModded[cptBis] = 0
         else:
             ajout = nEnergieEtZeroRate+5000
 #         tZRC3.append( ajout)
-        tZRC3[cpt] = ajout
-        cpt +=1
+#         tZRC3[cpt] = ajout
+        for cptBis in range (cpt,nMaxCptBis):
+            tZRC2[cptBis] = ajoutUnchanged
+            tZRC3[cptBis] = ajout
+        #pas
+#         cpt +=1
+        cpt += nPas
     
     if (bDurees):
-        print("Durée ZRC+Energie: ", time.process_time()-nTps )
+        print("Durée Energie de ZRC appliquée: ", time.process_time()-nTps )
         nTps = time.process_time()
     
     #nettoyage du silence en début et fin de fichier
@@ -504,7 +478,8 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
         while cpt < len(dataModded):
             while(dataModded[cpt]==0):
                 cpt+=1
-            nDebut = cpt-1
+#             nDebut = cpt-1
+            nDebut = max (nDebut, cpt-nTailleFen)
             break
 #         print(nFin)
         cpt = len(dataModded)-2 # nombre à la x*$£! au bout, on le vire, sert à rien ce truc
@@ -512,7 +487,8 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
 #             print (dataModded[cpt])
             while(dataModded[cpt]==0):
                 cpt-=1
-            nFin = cpt+2
+#             nFin = cpt+2
+            nFin = min (nFin, cpt+nTailleFen)
             break
 
         if (nFin> len(dataModded)-1):
@@ -630,7 +606,7 @@ def chercheSons():
     return
 
 
-# In[77]:
+# In[8]:
 
 
 
@@ -640,14 +616,14 @@ def chercheSons():
 travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav','sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'], bAffichage=False)
 # travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
 # travail(['sound/6.wav'], bAffichage=True)
-travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
+# travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
 # travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'])
 
 print("Son le plus court : ", nLongueurMinSonConnu)
 # print (tDicoSonsConnus)
 
 
-# In[78]:
+# In[9]:
 
 
 # evalue('sound/6.wav')
@@ -657,7 +633,7 @@ evalue('sound/2.wav')
 evalue('sound/3.wav')
 evalue('sound/son3.wav')
 evalue('sound/xxx.wav')
-# evalue('sound/4.wav')
+evalue('sound/4.wav')
 # evalue('sound/5.wav')
 # evalue('sound/6.wav')
 # evalue('sound/7.wav')
@@ -671,7 +647,7 @@ evalue('sound/xxx.wav')
 # evalue('sound/f.wav')
 
 
-# In[ ]:
+# In[10]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
@@ -687,14 +663,14 @@ evalue('sound/xxx.wav')
 # plt.show()
 
 
-# In[ ]:
+# In[11]:
 
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
 [10,11,12,13,14,15,16][-3:]
 
 
-# In[ ]:
+# In[12]:
 
 
 import time 
