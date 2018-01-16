@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[4]:
+# In[52]:
 
 
 import pylab
@@ -20,7 +20,7 @@ from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:90% !important; }</style>"))
 
 
-# In[5]:
+# In[53]:
 
 
 tDicoSonsConnus = {}
@@ -30,7 +30,7 @@ bDurees = False
 nTailleFen = round(22050*0.01) #10 ms
 
 
-# In[6]:
+# In[54]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -165,7 +165,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[7]:
+# In[64]:
 
 
 
@@ -278,10 +278,12 @@ def hammi(signal):
     return tSortie
     
     
-def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft,                bSignalOrignal = True, bHamminged=True, bZRs=True, bFftFused=True, bFFTs=True, bPeaks=True):
+def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, tSilences=[],                bSignalOrignal = True, bHamminged=True, bZRs=True, bFftFused=True, bFFTs=True, bPeaks=True):
     # print(tZRC3[::100])
     if (bSignalOrignal):
         plt.plot(data)
+    if (len(tSilences)>0):
+        plt.plot(tSilences, [2000 for _ in range(len(tSilences))], "o")
     if (bZRs):
         # plus la fenetre est courte et plus la courbre est agitée
         plt.plot(tZRC)
@@ -298,7 +300,7 @@ def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, t
         plt.title("fenêtré hamming")
         plt.show()
 
-    if (bFftFused):
+    if (bFftFused): #merged
         plt.plot([x * nDecalage for x in  list(range(0,len(tSignalFft)) ) ], tSignalFft)
         # plt.plot([item for sublist in tSignalFft for item in sublist] )
         plt.title("fft")
@@ -391,7 +393,7 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     tZRC2 = [0]*len(data)
     tZRC3 = [0]*len(data)
     tEnergie = [0]*nNbSignauxHam
-    tSignalHamminged
+#     tSignalHamminged
     
     nHam = len(tSignalHamminged[0])
     nDecalage = (nHam+1)//2
@@ -523,6 +525,26 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False): #vad voice active detec
     
     return (dataModded, tZRC2, tZRC3)
 
+def detecteSilences(dataModded):
+    tSilences = [] # paires d'indices, début et fin de silences
+    nDebut = 0
+    bSilenceEnCours = False
+    nFin = len(dataModded)
+    cpt=0
+    while cpt < len(dataModded):
+        if(dataModded[cpt]!=0):
+            if (bSilenceEnCours):
+                tSilences.append(cpt-1) # fin du silence àt-1, début de son
+                bSilenceEnCours = False
+        elif(not bSilenceEnCours):
+            bSilenceEnCours = True
+            tSilences.append(cpt) # début d'un silence
+        cpt+=1
+    #possibilité de fin de silence pas détectée par présence de bruit avant la fin
+    if (bSilenceEnCours):
+        tSilences.append(nFin-1)
+    return tSilences
+
 def travail(tFichiers, bAffichage=False):
     for sFichier in tFichiers:
         f_echant, data = wread(sFichier)    
@@ -550,8 +572,10 @@ def comparaison(sFichier, tPics):
     for indice, item in tDicoSonsConnus.items() :
 #         print("-->pics ",indice, "\n", item, "\n\n")
 #         print("compare avec ", indice)
-        #distance des fréquences
-        tDistances[cpt], _ = fastdtw(item, tPics, dist=None) #dist=euclidean)
+        # distance des fréquences
+        tDistances[cpt], _ = fastdtw(item, tPics, dist=euclidean)    #dist=euclidean) #dist=None
+        # pondérée par la longueur du fichier, nombre d'échantillons
+        tDistances[cpt] = tDistances[cpt] / ((len(item)+len(tPics))/2)
         #distance des puissances, dB
         
         tNoms[cpt] = indice
@@ -564,6 +588,7 @@ def comparaison(sFichier, tPics):
 #     plt.xscale("linear")
     plt.show()
     print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
+    return (tNoms[np.argmin(tDistances)], min(tDistances) )
 
 def ordreDeFrequence(tPics):
     nOrdre = sum(tPics) / len(tPics)
@@ -588,11 +613,116 @@ def evalue(sFichier):
     comparaison(sFichier, tPics)
     ordreDeFrequence(tPics)
     print("\n\n")
+
+def evalueComplexe(sFichier):
+    print("Détermine les sons de ", sFichier)
+    f_echant, data = wread(sFichier)
+    if (bDurees):
+        nTps = time.process_time()
+    chercheSons(data)
+    print("\n\n")
+
     
-def chercheSons():
-    # on hypothèse un fichier de plusieurs sons avec ou sans sliences entre les sons
+def chercheSons(tSonsInconnus):
+    if (bDurees):
+        nTps = time.process_time()
+    # on hypothèse un fichier de plusieurs sons avec ou sans silences entre les sons
+    nSeuilIgnorer= 1000
     # virer le silence en début de fichier
+    dataModdedFull, tZRC, tZREnergie = detectVoix(tSonsInconnus, nSeuilIgnorer, bExcluSilences=True)
     # à partir de ce nouveau début prendre X données du fichier, X étant la taille minimale d'un son de référence soit nLongueurMinSonConnu
+    dataModded, tZRC, tZREnergie = detectVoix(dataModdedFull, nSeuilIgnorer, bExcluSilences=True)
+    tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+    
+    tSilences = detecteSilences(tZREnergie)
+    nSilenceProchain = 0
+    global nLongueurMinSonConnu
+    nCurseurDebutLecture = 0
+#     nCurseurFinLecture = nLongueurMinSonConnu
+    nCurseurFinLecture = tSilences[nSilenceProchain*2]
+    #voir à faire unwhile aulieu de le faire une seule fois
+    if (nSilenceProchain+1 < len(tSilences)/2 ):
+        if (nCurseurFinLecture - nCurseurDebutLecture) < nLongueurMinSonConnu*0.75 :
+            nSilenceProchain +=1
+            nCurseurFinLecture = tSilences[nSilenceProchain*2]
+    nCurseurFinEtapePrec = nCurseurFinLecture
+    nFreq = 22050
+    nFenetreAugmentData = nFreq //75 
+    nTailleMax = len(tSonsInconnus)
+    tSonsTrouves = []
+    bFichierParcouru = False
+    
+    
+    Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie,                tSignalHamminged, tSignalFft, tSilences=tSilences, bFFTs=False, bFftFused=False, bHamminged=False)
+    
+    while(not bFichierParcouru):
+
+        bAgrandirEchantillon= True
+        nDistanceMin = np.Inf
+        sSonTrouve = ""
+        
+        while (bAgrandirEchantillon):
+            #pas opti on va recalculer la fft de tout ce qui a déjà été fait, il faudrait prendre la fin moins la dernière fenetre de hamming
+            print ("nDébut: ", nCurseurDebutLecture, " | fin: ",nCurseurFinLecture)
+            dataModded = dataModdedFull[nCurseurDebutLecture:nCurseurFinLecture]
+            dataModded, tZRC, tZREnergie = detectVoix(dataModded, nSeuilIgnorer, bExcluSilences=True)
+            if (bDurees):
+                print("Durée : ", time.process_time()-nTps )
+                nTps = time.process_time()
+            tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+            if (bDurees):
+                print("Durée : ", time.process_time()-nTps )
+#             Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+            Affichages("Son(s) inconnu(s)", dataModded, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+            tPics = detectPics(tSignalFft)
+            sNomProche, nDistanceProche = comparaison("Son Inconnu", tPics)
+            
+            if (nCurseurFinLecture == nTailleMax):
+                bAgrandirEchantillon = False
+            # même si la nouvelle distance plus petite est sur un autre son c'est OK
+            if (nDistanceProche< nDistanceMin):
+                nDistanceMin = nDistanceProche
+                sSonTrouve = sNomProche
+                nSilenceProchain +=1
+                if (nSilenceProchain < len(tSilences)/2 ):
+                    nCurseurFinLecture = tSilences[nSilenceProchain*2]
+                    nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
+                    nCurseurFinEtapePrec = nCurseurFinLecture
+                    print("agrandi l'échantillon")
+                else:
+                    nCurseurFinLecture = nTailleMax
+#                     bAgrandirEchantillon = False
+                    
+            else:
+                bAgrandirEchantillon = False
+                print("n'agrandit plus l'éhantillon")
+            
+                print("fin du fichier")
+
+#             nCurseurFinLecture +=nFenetreAugmentData
+            
+            
+        #on pourrait être à la fin du fichier mais de toute façon on arrive là avec un son reconnu donc à ajouter
+        tSonsTrouves.append(sSonTrouve)
+#         nSilenceProchain -= 1
+#         nCurseurDebutLecture = nCurseurFinEtapePrec
+        if (nSilenceProchain < len(tSilences)/2 ):
+            nCurseurDebutLecture = tSilences[(nSilenceProchain-1)*2 +1]
+            nCurseurFinLecture = tSilences[(nSilenceProchain)*2]
+            
+#             nCurseurFinLecture = nCurseurDebutLecture + nLongueurMinSonConnu
+#             nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
+        else:
+            nCurseurFinLecture = nTailleMax
+        nCurseurFinEtapePrec = nCurseurFinLecture
+        if (nCurseurFinLecture >= nTailleMax-(nLongueurMinSonConnu*0.1)):
+            bFichierParcouru = True
+    
+    print("Detection Multiple terminée")
+    print (tSonsTrouves)
+#     ordreDeFrequence(tPics)
+    print("\n\n")
+    
     # Enregistrer la plus petite distance pour cet échantillon
     # augmenter la taille de la fenêtre prise d'un quart de seconde
     # Calculer la nouvelle distance de cet échantillon
@@ -603,10 +733,11 @@ def chercheSons():
     # recommencer le fonctionnement précédent pour rechercher un nouveau son, faire celà jusqu'à la fin du fichier (auquel on a enlevé le silence de fin)
     
     #risque que l'algo donne toujours une distance sur un son à la fin alors qu'il n'y a rien à attribuer
-    return
+    
+    
 
 
-# In[8]:
+# In[56]:
 
 
 
@@ -616,24 +747,24 @@ def chercheSons():
 travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav','sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'], bAffichage=False)
 # travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
 # travail(['sound/6.wav'], bAffichage=True)
-# travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
+travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
 # travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'])
 
 print("Son le plus court : ", nLongueurMinSonConnu)
 # print (tDicoSonsConnus)
 
 
-# In[9]:
+# In[67]:
 
 
 # evalue('sound/6.wav')
-evalue('sound/0.wav')
-evalue('sound/1.wav')
-evalue('sound/2.wav')
-evalue('sound/3.wav')
-evalue('sound/son3.wav')
-evalue('sound/xxx.wav')
-evalue('sound/4.wav')
+# evalue('sound/0.wav')
+# evalue('sound/1.wav')
+# evalue('sound/2.wav')
+# evalue('sound/3.wav')
+# evalue('sound/son3.wav')
+# evalue('sound/xxx.wav')
+# evalue('sound/4.wav')
 # evalue('sound/5.wav')
 # evalue('sound/6.wav')
 # evalue('sound/7.wav')
@@ -645,9 +776,16 @@ evalue('sound/4.wav')
 # evalue('sound/d.wav')
 # evalue('sound/e.wav')
 # evalue('sound/f.wav')
+# evalueComplexe("sound/custom 4b8.wav")
 
 
-# In[10]:
+# In[66]:
+
+
+evalueComplexe("sound/custom 4b8.wav")
+
+
+# In[59]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
@@ -663,14 +801,14 @@ evalue('sound/4.wav')
 # plt.show()
 
 
-# In[11]:
+# In[60]:
 
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
 [10,11,12,13,14,15,16][-3:]
 
 
-# In[12]:
+# In[61]:
 
 
 import time 
