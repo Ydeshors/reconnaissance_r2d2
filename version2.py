@@ -1,8 +1,11 @@
 
 # coding: utf-8
 
-# In[52]:
+# In[1]:
 
+
+import matplotlib
+# matplotlib.use('TkAgg')
 
 import pylab
 import numpy as np
@@ -20,7 +23,7 @@ from IPython.core.display import display, HTML
 display(HTML("<style>.container { width:90% !important; }</style>"))
 
 
-# In[53]:
+# In[2]:
 
 
 tDicoSonsConnus = {}
@@ -30,7 +33,7 @@ bDurees = False
 nTailleFen = round(22050*0.01) #10 ms
 
 
-# In[54]:
+# In[3]:
 
 
 def _datacheck_peakdetect(x_axis, y_axis):
@@ -165,7 +168,7 @@ def peakdetect(y_axis, x_axis = None, lookahead = 200, delta=0):
     return [max_peaks, min_peaks]
 
 
-# In[64]:
+# In[4]:
 
 
 
@@ -280,6 +283,7 @@ def hammi(signal):
     
 def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, tSilences=[],                bSignalOrignal = True, bHamminged=True, bZRs=True, bFftFused=True, bFFTs=True, bPeaks=True):
     # print(tZRC3[::100])
+    get_ipython().magic('matplotlib inline')
     if (bSignalOrignal):
         plt.plot(data)
     if (len(tSilences)>0):
@@ -545,7 +549,106 @@ def detecteSilences(dataModded):
         tSilences.append(nFin-1)
     return tSilences
 
+def AfficheLectureEnregistrement(sFichier):
+    get_ipython().magic('matplotlib notebook')
+    f_echant, data = wread(sFichier)
+    
+    nTpsStart = time.process_time()
+#     dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True)
+#     global nLongueurMinSonConnu
+#     if (len(dataModded)<nLongueurMinSonConnu):
+#         nLongueurMinSonConnu = len(dataModded)
+#     #Hamming, padding zeros, fft
+#     tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+#     if bAffichage:
+#         Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+#     tPics = detectPics(tSignalFft)
+    
+#     plt.ion()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    
+    '''
+    fig.show()
+    fig.canvas.draw()
+    nDelta = 1/60 # changera après, fixe parce que pas encore de rafraichissement
+    for i in range(0,100):
+        nTps = time.process_time()
+        nNbAvancee = nDelta*22050 # equivalent du temps passsé en nombre d'echantillons 
+        ax.clear()
+        ax.plot(matrix[i,:])
+        fig.canvas.draw()
+        nDelta = time.process_time() - nTps
+    '''
+    
+    # autre version où je garde un nombre de valeurs fixe en abscisses 
+    nNbValsAbs = 22050 //5
+    nAmplitudeMax = 50000
+    nStart = 0
+    nEnd = nStart + nNbValsAbs
+    nMax = len(data)
+    x = np.linspace(0, 10, nNbValsAbs) # nb d'échantillons qu'on a en un 60ième de seconde réparties de 0à10
+    tFenHamV1 = np.hamming(nNbValsAbs)
+    
+    if (len(data)>= nNbValsAbs):
+        y = data[:nNbValsAbs]
+    else:
+        y = np.concatenate( ( data[:], np.array([0] * (nNbValsAbs-len(data))) ) )
+    
+    ax.set_ylim(-nAmplitudeMax,nAmplitudeMax)
+    line1, = ax.plot(x, y, '-') # Returns a tuple of line objects, thus the comma
+    fig.canvas.draw()
+    
+    nDelta = 1/60 # changera après, fixe parce que pas encore de rafraichissement
+#     print("nbEchantillons ", nNbValsAbs, "   | nFinFichier ",nMax)
+    
+    bV1 = True
+    bV2 = not bV1
+    
+    while nEnd <= nMax:
+        nTps = time.process_time()
+        nNbAvancee = round(nDelta*22050) # equivalent du temps passé en nombre d'echantillons
+        #v1
+            # affiche une période de son fixe, genre la dernière demi seconde, à chaque rafraichissement
+            # donc si update rapide alors affichage d'une partie déjà affichée
+        if bV1:
+            nStart += nNbAvancee
+        #v2
+            # Affiche seulement le morceau de son lu pendant la durée d'affichage, donc durée variable 10ième de seconde plus moins ...
+            # le mieux serait peut-être de seulement afficher les 1/30ème de seconde de son précédent 
+            # même si d'un rafraichissement à l'autre on affiche une partie de ce qui a été affiché avant
+        if bV2:
+            nStart = nEnd
+            nNbValsAbs = nNbAvancee
+            x = np.linspace(0, 10, nNbValsAbs)
+        
+        nEnd = nStart + nNbValsAbs
+        tHam = np.hamming(nNbValsAbs)
+        
+#         print("debut Fin ",nStart, " ",nEnd)
+        if nStart >= nMax:
+            break
+        if nEnd > nMax:
+#             print(data[nStart:nMax])
+#             print(np.array([0] * (nEnd-nMax)))
+            y = np.concatenate( (data[nStart:nMax], np.array([0] * (nEnd-nMax)) ) )
+        else:
+            y = data[nStart:nEnd]
+        if bV1:
+            line1.set_ydata(y*tFenHamV1)
+        if bV2:
+            ax.clear()
+            ax.set_ylim(-nAmplitudeMax,nAmplitudeMax)
+            ax.plot(x,y*tHam,'-')
+        
+        fig.canvas.draw()
+        nDelta = time.process_time() - nTps
+#         nDelta = max(nDelta, 1/60) # je me fiche d'un rafraichissement plus important que 60fps, il faudrait alors rajouter une pause, plt.pause(0.05) peut-être ou avec time plutôt
+#         print("Delta ",(time.process_time() - nTps), " -> ", nDelta)
+
+
 def travail(tFichiers, bAffichage=False):
+#     %matplotlib inline
     for sFichier in tFichiers:
         f_echant, data = wread(sFichier)    
         dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True)
@@ -563,7 +666,7 @@ def travail(tFichiers, bAffichage=False):
         print ("Enregistrement du fichier ", sFichier, " terminé.")
     print("Travail terminé.")
 
-def comparaison(sFichier, tPics):
+def comparaison(sFichier, tPics, bPlot = True, bResult=True):
     nNbSonsConnus = len(tDicoSonsConnus)
     tDistances = [0]*nNbSonsConnus
     tNoms = [""]*nNbSonsConnus
@@ -574,20 +677,24 @@ def comparaison(sFichier, tPics):
 #         print("compare avec ", indice)
         # distance des fréquences
         tDistances[cpt], _ = fastdtw(item, tPics, dist=euclidean)    #dist=euclidean) #dist=None
-        # pondérée par la longueur du fichier, nombre d'échantillons
+        # pondérée par la longueur du fichier, nombre d'échantillons .....ou racine de ( L1+L2 ) si distance euclidienne dans la dtw
         tDistances[cpt] = tDistances[cpt] / ((len(item)+len(tPics))/2)
         #distance des puissances, dB
         
         tNoms[cpt] = indice
         cpt += 1
-    plt.ylabel('Distances')
-    tIndices = np.arange(nNbSonsConnus)
-    plt.title('Distances de '+sFichier )
-    plt.xticks(tIndices, tNoms , rotation=70)
-    plt.plot(tIndices, tDistances)
-#     plt.xscale("linear")
-    plt.show()
-    print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
+    if (bPlot):
+        get_ipython().magic('matplotlib inline')
+        plt.figure(figsize=(15,4))
+        plt.ylabel('Distances')
+        tIndices = np.arange(nNbSonsConnus)
+        plt.title('Distances de '+sFichier )
+        plt.xticks(tIndices, tNoms , rotation=90)
+        plt.plot(tIndices, tDistances)
+    #     plt.xscale("linear")
+        plt.show()
+    if (bResult):
+        print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
     return (tNoms[np.argmin(tDistances)], min(tDistances) )
 
 def ordreDeFrequence(tPics):
@@ -595,7 +702,8 @@ def ordreDeFrequence(tPics):
     print("Fréquence moyenne : ", nOrdre)
     
     
-def evalue(sFichier):
+def evalue(sFichier, bAffichage=True):
+#     %matplotlib inline
     print("Evaluation de ", sFichier)
     f_echant, data = wread(sFichier)
     if (bDurees):
@@ -608,22 +716,24 @@ def evalue(sFichier):
     if (bDurees):
         print("Durée : ", time.process_time()-nTps )
 #     nTps = time.process_time()
-    Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+    if bAffichage:
+        Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
     tPics = detectPics(tSignalFft)
-    comparaison(sFichier, tPics)
+    comparaison(sFichier, tPics, bAffichage)
     ordreDeFrequence(tPics)
     print("\n\n")
 
-def evalueComplexe(sFichier):
+def evalueComplexe(sFichier, bDetails=True):
+#     %matplotlib inline
     print("Détermine les sons de ", sFichier)
     f_echant, data = wread(sFichier)
     if (bDurees):
         nTps = time.process_time()
-    chercheSons(data)
+    chercheSons(data, bDetails)
     print("\n\n")
 
     
-def chercheSons(tSonsInconnus):
+def chercheSons(tSonsInconnus, bDetails=True):
     if (bDurees):
         nTps = time.process_time()
     # on hypothèse un fichier de plusieurs sons avec ou sans silences entre les sons
@@ -652,8 +762,8 @@ def chercheSons(tSonsInconnus):
     tSonsTrouves = []
     bFichierParcouru = False
     
-    
-    Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie,                tSignalHamminged, tSignalFft, tSilences=tSilences, bFFTs=False, bFftFused=False, bHamminged=False)
+    if (bDetails):
+        Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie,                tSignalHamminged, tSignalFft, tSilences=tSilences, bFFTs=False, bFftFused=False, bHamminged=False)
     
     while(not bFichierParcouru):
 
@@ -663,7 +773,8 @@ def chercheSons(tSonsInconnus):
         
         while (bAgrandirEchantillon):
             #pas opti on va recalculer la fft de tout ce qui a déjà été fait, il faudrait prendre la fin moins la dernière fenetre de hamming
-            print ("nDébut: ", nCurseurDebutLecture, " | fin: ",nCurseurFinLecture)
+            if (bDetails):
+                print ("nDébut: ", nCurseurDebutLecture, " | fin: ",nCurseurFinLecture)
             dataModded = dataModdedFull[nCurseurDebutLecture:nCurseurFinLecture]
             dataModded, tZRC, tZREnergie = detectVoix(dataModded, nSeuilIgnorer, bExcluSilences=True)
             if (bDurees):
@@ -673,9 +784,10 @@ def chercheSons(tSonsInconnus):
             if (bDurees):
                 print("Durée : ", time.process_time()-nTps )
 #             Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
-            Affichages("Son(s) inconnu(s)", dataModded, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+            if (bDetails):
+                Affichages("Son(s) inconnu(s)", dataModded, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
             tPics = detectPics(tSignalFft)
-            sNomProche, nDistanceProche = comparaison("Son Inconnu", tPics)
+            sNomProche, nDistanceProche = comparaison("Son Inconnu", tPics, bDetails, bDetails)
             
             if (nCurseurFinLecture == nTailleMax):
                 bAgrandirEchantillon = False
@@ -688,16 +800,17 @@ def chercheSons(tSonsInconnus):
                     nCurseurFinLecture = tSilences[nSilenceProchain*2]
                     nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
                     nCurseurFinEtapePrec = nCurseurFinLecture
-                    print("agrandi l'échantillon")
+                    if (bDetails):
+                        print("agrandi l'échantillon")
                 else:
                     nCurseurFinLecture = nTailleMax
 #                     bAgrandirEchantillon = False
                     
             else:
                 bAgrandirEchantillon = False
-                print("n'agrandit plus l'éhantillon")
-            
-                print("fin du fichier")
+                if (bDetails):
+                    print("n'agrandit plus l'éhantillon")
+                    print("fin du fichier")
 
 #             nCurseurFinLecture +=nFenetreAugmentData
             
@@ -737,7 +850,7 @@ def chercheSons(tSonsInconnus):
     
 
 
-# In[56]:
+# In[5]:
 
 
 
@@ -748,18 +861,18 @@ travail(['sound/0.wav','sound/1.wav','sound/2.wav','sound/3.wav','sound/4.wav','
 # travail(['sound/4.wav','sound/5.wav','sound/6.wav','sound/7.wav','sound/8.wav','sound/9.wav'])
 # travail(['sound/6.wav'], bAffichage=True)
 travail(['sound/a.wav','sound/b.wav','sound/c.wav','sound/d.wav','sound/e.wav','sound/f.wav'], bAffichage=False)
-# travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'])
-
+travail(['sound/g.wav','sound/h.wav','sound/i.wav','sound/j.wav','sound/k.wav','sound/l.wav'], bAffichage=False)
+travail(['sound/m.wav', 'sound/n.wav', 'sound/o.wav', 'sound/p.wav', 'sound/q.wav', 'sound/r.wav', 'sound/s.wav', 'sound/t.wav', 'sound/u.wav', 'sound/v.wav', 'sound/w.wav', 'sound/x.wav', 'sound/y.wav', 'sound/z.wav'], bAffichage=False)
 print("Son le plus court : ", nLongueurMinSonConnu)
 # print (tDicoSonsConnus)
 
 
-# In[67]:
+# In[6]:
 
 
 # evalue('sound/6.wav')
 # evalue('sound/0.wav')
-# evalue('sound/1.wav')
+evalue('sound/1.wav', False)
 # evalue('sound/2.wav')
 # evalue('sound/3.wav')
 # evalue('sound/son3.wav')
@@ -779,13 +892,13 @@ print("Son le plus court : ", nLongueurMinSonConnu)
 # evalueComplexe("sound/custom 4b8.wav")
 
 
-# In[66]:
+# In[7]:
 
 
-evalueComplexe("sound/custom 4b8.wav")
+evalueComplexe("sound/custom 4b8.wav", bDetails=False)
 
 
-# In[59]:
+# In[8]:
 
 
 ###### test, ça marche pas comme ça, spectrogram de signal veut une fft pas une successions de fenêtres recouvrantes
@@ -801,18 +914,94 @@ evalueComplexe("sound/custom 4b8.wav")
 # plt.show()
 
 
-# In[60]:
+# In[9]:
 
 
 tTest = [ [[10,11,12,13],["a"]], [[14,15],[8]], [[17,18,19],[9]] ]
 [10,11,12,13,14,15,16][-3:]
 
 
-# In[61]:
+# In[10]:
+
+
+plt.axis([0, 10, 0, 1])
+plt.ion()
+
+for i in range(10):
+    y = np.random.random()
+    plt.scatter(i, y)
+    plt.pause(0.05)
+
+# while True:
+#     plt.pause(0.05)
+
+
+# In[11]:
 
 
 import time 
 print(time.process_time())
 print("oups")
 time.process_time()
+
+
+# In[12]:
+
+
+'''
+%matplotlib notebook
+m = 100
+n = 100
+matrix = np.random.normal(0,1,m*n).reshape(m,n)
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+plt.ion()
+
+fig.show()
+fig.canvas.draw()
+
+for i in range(0,100):
+    ax.clear()
+    ax.plot(matrix[i,:])
+    fig.canvas.draw()
+'''
+
+
+# In[13]:
+
+
+'''
+%matplotlib notebook
+x = np.linspace(0, 6*np.pi, 100)
+y = np.sin(x)
+
+# You probably won't need this if you're embedding things in a tkinter plot...
+# plt.ion()
+
+fig = plt.figure()
+ax = fig.add_subplot(111)
+line1, = ax.plot(x, y, 'r-') # Returns a tuple of line objects, thus the comma
+# fig.show()
+# fig.canvas.draw()
+
+for phase in np.linspace(0, 2*np.pi, 100):
+    line1.set_ydata(np.sin(x + phase))
+#     print(phase)
+#     print(x+phase)
+#     plt.pause(0.05)
+    fig.canvas.draw()
+'''
+
+
+# In[20]:
+
+
+AfficheLectureEnregistrement("sound/custom 4b8.wav")
+
+
+# In[21]:
+
+
+AfficheLectureEnregistrement("sound/c.wav")
 
