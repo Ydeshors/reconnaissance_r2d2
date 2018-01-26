@@ -153,12 +153,11 @@ def Affichages(sFichier, data, dataModded, tZRC, tZREnergie, tSignalHamminged, t
         plt.plot(data)
     if (len(tSilences)>0):
         plt.plot(tSilences, [2000 for _ in range(len(tSilences))], "o")
-        plt.plot(tSilences, [2000 for _ in range(len(tSilences))],"o")
-        plt.plot([x+nDecalageStart for x in tSilences ], [2000 for _ in range(len(tSilences))])
+        plt.plot([x+nDecalageStart for x in tSilences ], [2000 for _ in range(len(tSilences))], "o")
     if (bZRs):
-        # plus la fenetre est courte et plus la courbre est agitée
-        plt.plot(tZRC)
-        plt.plot(tZREnergie)
+        # plus la fenetre est courte et plus la courbe est agitée
+        plt.plot([x+nDecalageStart for x in list(range(0,len(tZRC)) ) ], tZRC)
+        plt.plot([x+nDecalageStart for x in list(range(0,len(tZREnergie)) ) ], tZREnergie)
     if (bSignalOrignal or bZRs):
         plt.title("Fichier "+str(sFichier))
         plt.show()
@@ -310,6 +309,7 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False):
     
     #nettoyage du silence en début et fin de fichier
 #     Il serait préférable d'avoir assez de 0 en début et fin pour remplir la moitié de la première(dernière) fenêtre de hamming avec ces 0, les fft seront plus douces aux extrémités
+    nDebut = 0  
     if (bExcluSilences):
         nDebut = 0
         nFin = len(dataModded)
@@ -340,7 +340,7 @@ def detectVoix(data, nSeuil=30, bExcluSilences = False):
             cpt +=1
             cptEX +=1
         dataModded = dataEX
-    return (dataModded, tZRC2, tZRC3)
+    return (dataModded, tZRC2, tZRC3, nDebut)
 
 """ Fonction de détection des silences """
 def detecteSilences(dataModded):
@@ -435,7 +435,7 @@ Le moyen utilisé est la fonction detectVoix
 def travail(tFichiers, bAffichage=False):
     for sFichier in tFichiers:
         f_echant, data = wread(sFichier)    
-        dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True)
+        dataModded, tZRC, tZREnergie, _ = detectVoix(data, 1000, bExcluSilences=True)
         global nLongueurMinSonConnu
         if (len(dataModded)<nLongueurMinSonConnu):
             nLongueurMinSonConnu = len(dataModded)
@@ -450,10 +450,12 @@ def travail(tFichiers, bAffichage=False):
 """
 Comparaison du signal au moyen de DTW (Dynamic Time Wrapping)
 """
-def comparaison(sFichier, tPics, bPlot = True, bResult=True):
+def comparaison(sFichier, tPics, bPlot = True, bResult=True, sDonneeAncienne=""):
     nNbSonsConnus = len(tDicoSonsConnus)
     tDistances = [0]*nNbSonsConnus
     tNoms = [""]*nNbSonsConnus
+    #utilisé pour savoir si à posteriori la distance d'un son a évolué depuis la dernière fois
+    nDistanceAncienneDonnee = -1
     cpt = 0
     for indice, item in tDicoSonsConnus.items() :
         # distance des fréquences
@@ -463,6 +465,8 @@ def comparaison(sFichier, tPics, bPlot = True, bResult=True):
         #distance des puissances, dB
         
         tNoms[cpt] = indice
+        if sDonneeAncienne == indice :
+            nDistanceAncienneDonnee = tDistances[cpt]
         cpt += 1
     if (bPlot):
         plt.figure(figsize=(15,4))
@@ -474,7 +478,7 @@ def comparaison(sFichier, tPics, bPlot = True, bResult=True):
         plt.show()
     if (bResult):
         print ("Son le plus proche : ", tNoms[np.argmin(tDistances)], " | Distance : ", min(tDistances))
-    return (tNoms[np.argmin(tDistances)], min(tDistances) )
+    return (tNoms[np.argmin(tDistances)], min(tDistances), nDistanceAncienneDonnee )
 
 """
 Evaluation d'un fichier qui a un seul caractère
@@ -486,7 +490,7 @@ def evalue(sFichier, bAffichage=True):
     if (bDurees):
         nTps = time.process_time()
 
-    dataModded, tZRC, tZREnergie = detectVoix(data, 1000, bExcluSilences=True)
+    dataModded, tZRC, tZREnergie, _ = detectVoix(data, 1000, bExcluSilences=True)
 
     # Temps nécessaire pour la détection de la voix
     if (bDurees):
@@ -509,12 +513,12 @@ def evalue(sFichier, bAffichage=True):
 """
 Evaluation d'un fichier qui a plusieurs caractères
 """
-def evalueComplexe(sFichier, bDetails=True):
+def evalueComplexe(sFichier, bDetails=True, nSeuilIgnorer=1000):
     print("Détermine les sons de ", sFichier)
     f_echant, data = wread(sFichier)
     if (bDurees):
         nTps = time.process_time()
-    chercheSons(data, bDetails)
+    chercheSons(data, bDetails, nSeuilIgnorer)
     print("\n\n")
 
 """
@@ -529,9 +533,9 @@ def chercheSons(tSonsInconnus, bDetails=True, nSeuilIgnorer = 1000):
         nTps = time.process_time()
     # on hypothèse un fichier de plusieurs sons avec ou sans silences entre les sons
     # virer le silence en début de fichier
-    dataModdedFull, tZRC, tZREnergie = detectVoix(tSonsInconnus, nSeuilIgnorer, bExcluSilences=True)
+    dataModdedFull, tZRC, tZREnergie, nDecalageStartPlot = detectVoix(tSonsInconnus, nSeuilIgnorer, bExcluSilences=True)
     # à partir de ce nouveau début prendre X données du fichier, X étant la taille minimale d'un son de référence soit nLongueurMinSonConnu
-    dataModded, tZRC, tZREnergie = detectVoix(dataModdedFull, nSeuilIgnorer, bExcluSilences=True)
+    dataModded, tZRC, tZREnergie, _ = detectVoix(dataModdedFull, nSeuilIgnorer, bExcluSilences=True)
     tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
     
     tSilences = detecteSilences(tZREnergie)
@@ -548,7 +552,7 @@ def chercheSons(tSonsInconnus, bDetails=True, nSeuilIgnorer = 1000):
     bFichierParcouru = False
 
     if (bDetails):
-        Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, tSilences=tSilences, bFFTs=False, bFftFused=False, bHamminged=False)
+        Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, tSilences=tSilences, nDecalageStart=nDecalageStartPlot, bFFTs=False, bFftFused=False, bHamminged=False)
     
     while(not bFichierParcouru):
 
@@ -561,46 +565,87 @@ def chercheSons(tSonsInconnus, bDetails=True, nSeuilIgnorer = 1000):
             if (bDetails):
                 print ("nDébut: ", nCurseurDebutLecture, " | fin: ",nCurseurFinLecture)
             dataModded = dataModdedFull[nCurseurDebutLecture:nCurseurFinLecture]
-            dataModded, tZRC, tZREnergie = detectVoix(dataModded, nSeuilIgnorer, bExcluSilences=True)
-            if (bDurees):
-                print("Durée : ", time.process_time()-nTps )
-                nTps = time.process_time()
-            tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
-            if (bDurees):
-                print("Durée : ", time.process_time()-nTps )
-            if (bDetails):
-                Affichages("Son(s) inconnu(s)", dataModded, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
-            tPics = detectPics(tSignalFft)
-            sNomProche, nDistanceProche = comparaison("Son Inconnu", tPics, bDetails, bDetails)
+            if (len(dataModded)> nLongueurMinSonConnu*0.6) :
+                
+                dataModded, tZRC, tZREnergie, _ = detectVoix(dataModded, nSeuilIgnorer, bExcluSilences=True)
+                if (bDurees):
+                    print("Durée : ", time.process_time()-nTps )
+                    nTps = time.process_time()
+                tSignalHamminged, tSignalFft = HammingPaddingFourier(dataModded)
+                if (bDurees):
+                    print("Durée : ", time.process_time()-nTps )
+    #             Affichages("Son(s) inconnu(s)", tSonsInconnus, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+                if (bDetails):
+                    Affichages("Son(s) inconnu(s)", dataModded, dataModded, tZRC, tZREnergie, tSignalHamminged, tSignalFft, bFFTs=False)
+                tPics = detectPics(tSignalFft)
+                sNomProche, nDistanceProche, nDistanceAncien = comparaison("Son Inconnu", tPics, bDetails, bDetails, sSonTrouve)
+
+                if (nCurseurFinLecture == nTailleMax):
+                    bAgrandirEchantillon = False
+                # même si la nouvelle distance plus petite est sur un autre son c'est OK
+                if (nDistanceProche< nDistanceMin):
+                    nDistanceMin = nDistanceProche
+                    sSonTrouve = sNomProche
+                    nSilenceProchain +=1
+                    if (nSilenceProchain < len(tSilences)/2 ):
+                        nCurseurFinLecture = tSilences[nSilenceProchain*2]
+                        nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
+                        nCurseurFinEtapePrec = nCurseurFinLecture
+                        if (bDetails):
+                            print("agrandi l'échantillon")
+                    else:
+                        nCurseurFinLecture = nTailleMax
+    #                     bAgrandirEchantillon = False
+
+                #vérifier que la distance, malgré plus grande, reste proche de la plus petite
+                # ET que le son lié à la plus petite n'est pas maintenant extremement éloigné pour cesser d'agrandir l'échantillong
+                elif (nDistanceProche < nDistanceMin*2) and (nDistanceAncien > nDistanceProche*2) and sSonTrouve != sNomProche :
+                    # clone du if précédent, séparation pour test voir si ça reste cohérent pour le résultat voulu
+                    if (bDetails):
+                        print ("Cas spécial, distance plus grande (sans doute à cause du bruit) mais son détecté jugé plus proche qu'avant l'agrandissement")
+                    nDistanceMin = nDistanceProche
+                    sSonTrouve = sNomProche
+                    nSilenceProchain +=1
+                    if (nSilenceProchain < len(tSilences)/2 ):
+                        nCurseurFinLecture = tSilences[nSilenceProchain*2]
+                        nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
+                        nCurseurFinEtapePrec = nCurseurFinLecture
+                        if (bDetails):
+                            print("agrandi l'échantillon")
+                    else:
+                        nCurseurFinLecture = nTailleMax
+
+                else:
+
+                    bAgrandirEchantillon = False
+                    if (bDetails):
+                        print("n'agrandit plus l'échantillon")
+                        print("fin du fichier")
+
+                    #on pourrait être à la fin du fichier mais de toute façon on arrive là avec un son reconnu donc à ajouter
+                    tSonsTrouves.append(sSonTrouve)
             
-            if (nCurseurFinLecture == nTailleMax):
-                bAgrandirEchantillon = False
-            # même si la nouvelle distance plus petite est sur un autre son c'est OK
-            if (nDistanceProche< nDistanceMin):
-                nDistanceMin = nDistanceProche
-                sSonTrouve = sNomProche
+
+            # fin if morceau pas trop petit
+            else:
                 nSilenceProchain +=1
                 if (nSilenceProchain < len(tSilences)/2 ):
                     nCurseurFinLecture = tSilences[nSilenceProchain*2]
                     nCurseurFinLecture = min (nCurseurFinLecture, nTailleMax)
+                    nCurseurFinEtapePrec = nCurseurFinLecture
                     if (bDetails):
                         print("agrandi l'échantillon")
                 else:
                     nCurseurFinLecture = nTailleMax
-            else:
-                bAgrandirEchantillon = False
-                if (bDetails):
-                    print("n'agrandit plus l'éhantillon")
-                    print("fin du fichier")
-            
-        #on pourrait être à la fin du fichier mais de toute façon on arrive là avec un son reconnu donc à ajouter
-        tSonsTrouves.append(sSonTrouve)
+
+
         if (nSilenceProchain < len(tSilences)/2 ):
             nCurseurDebutLecture = tSilences[(nSilenceProchain-1)*2 +1]
             nCurseurFinLecture = tSilences[(nSilenceProchain)*2]
         else:
             nCurseurFinLecture = nTailleMax
         if (nCurseurFinLecture >= nTailleMax-(nLongueurMinSonConnu*0.1)):
+            tSonsTrouves.append(sSonTrouve)
             bFichierParcouru = True
     
     print("Detection Multiple terminée")
@@ -634,11 +679,13 @@ def evaluation(nom, affichage=False):
     evalue(nomfichier, affichage)
 
 """ Fonction principale pour les sons contenant plusieurs caractères"""
-def evaluation_complexe(nom, affichage=False):
+def evaluation_complexe(nom, affichage=False, nSeuilIgnorer=1000):
     nomfichier = 'soundTest/' + nom + '.wav'
-    evalueComplexe(nomfichier, affichage)
+    evalueComplexe(nomfichier, affichage, nSeuilIgnorer=1000)
 
 initialisation()
 
-# Exemple d'évaluation d'un son avec affichage du résultat
-evaluation('xxx', True)
+# Exemple d'évaluation d'un fichier avec un seul son et affichage du résultat
+evaluation('son3', True)
+# Exemple d'évaluation d'un fichier composé de plusieurs sons et affichage du résultat
+evaluation_complexe('custom 4b8', True)
